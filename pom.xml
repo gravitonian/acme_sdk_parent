@@ -30,9 +30,6 @@
     <docker.share.image>alfresco/alfresco-share</docker.share.image>
     <keystore.settings>-Dencryption.keystore.type=JCEKS -Dencryption.cipherAlgorithm=AES/CBC/PKCS5Padding -Dencryption.keyAlgorithm=AES -Dencryption.keystore.location=/usr/local/tomcat/shared/classes/alfresco/extension/keystore/keystore -Dmetadata-keystore.password=mp6yc0UD9e -Dmetadata-keystore.aliases=metadata -Dmetadata-keystore.metadata.password=oKIWzVdEdA -Dmetadata-keystore.metadata.algorithm=AES</keystore.settings>
 
-    <!-- JRebel Hot reloading of classpath stuff and web resource stuff -->
-    <jrebel.version>1.1.8</jrebel.version>
-
     <!-- Environment configuration properties -->
     <share.port>8180</share.port>
     <share.debug.port>9898</share.debug.port>
@@ -42,6 +39,17 @@
     <postgres.port>5555</postgres.port>
     <!-- This parameter is only required for those cases in which ACS is not exposed in http://localhost:8080/alfresco (i.e. Windows Docker) -->
     <test.acs.endpoint.path />
+
+    <!-- Current versions for different maven plugins -->
+    <nexus.staging.maven.plugin.version>1.6.13</nexus.staging.maven.plugin.version>
+    <maven.release.plugin.version>3.0.1</maven.release.plugin.version>
+    <jrebel.plugin.version>1.1.8</jrebel.plugin.version>
+    <maven.resource.plugin.version>3.1.0</maven.resource.plugin.version>
+    <maven.dependency.plugin.version>3.1.1</maven.dependency.plugin.version>
+    <maven.failsafe.plugin.version>3.0.0-M1</maven.failsafe.plugin.version>
+    <maven.jar.plugin.version>3.1.0</maven.jar.plugin.version>
+    <closure.compiler.maven.plugin.version>2.28.0</closure.compiler.maven.plugin.version>
+    <maven.assembly.plugin.version>2.6</maven.assembly.plugin.version>
 
   </properties>
 
@@ -158,6 +166,144 @@
       </testResource>
     </testResources>
 
+    <!-- Define and configure plugins that might be used by extension projects -->
+    <pluginManagement>
+      <plugins>
+        <!--
+           Build an AMP if 3rd party libs are needed by the extensions
+           JARs are the default artifact produced in your modules, if you want to build an amp for each module
+           you have to enable this plugin and inspect the src/main/assembly.xml file if you want to customize
+           the layout of your AMP. The end result is that Maven will produce both a JAR file and an AMP with your
+           module.
+        -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-assembly-plugin</artifactId>
+          <version>${maven.assembly.plugin.version}</version>
+          <executions>
+            <execution>
+              <id>build-amp-file</id>
+              <phase>package</phase>
+              <goals>
+                <goal>single</goal>
+              </goals>
+              <configuration>
+                <appendAssemblyId>false</appendAssemblyId>
+                <descriptor>src/main/assembly/amp.xml</descriptor>
+              </configuration>
+            </execution>
+          </executions>
+          <dependencies>
+            <dependency>
+              <groupId>org.alfresco.maven.plugin</groupId>
+              <artifactId>alfresco-maven-plugin</artifactId>
+              <version>${alfresco.sdk.version}</version>
+            </dependency>
+          </dependencies>
+        </plugin>
+
+        <!-- Compress JavaScript files, if exists, and store as *.min.js -->
+        <plugin>
+          <groupId>com.github.blutorange</groupId>
+          <artifactId>closure-compiler-maven-plugin</artifactId>
+          <version>${closure.compiler.maven.plugin.version}</version>
+          <executions>
+            <!-- Compress the JS files under the assembly folder -->
+            <execution>
+              <id>compress-assembly</id>
+              <phase>generate-resources</phase>
+              <goals>
+                <goal>minify</goal>
+              </goals>
+              <configuration>
+                <baseSourceDir>${project.basedir}/src/main/assembly</baseSourceDir>
+                <baseTargetDir>${project.basedir}/src/main/assembly</baseTargetDir>
+                <sourceDir>web</sourceDir>
+                <targetDir>web</targetDir>
+                <skipMerge>true</skipMerge>
+                <includes>
+                  <include>**/*.js</include>
+                </includes>
+                <excludes>
+                  <exclude>**/webscripts/**</exclude>
+                  <exclude>**/site-webscripts/**</exclude>
+                  <exclude>**/META-INF/**</exclude>
+                  <exclude>**/*.lib.js</exclude>
+                  <exclude>**/*.css</exclude>
+                  <exclude>**/*.min.js</exclude>
+                  <exclude>**/*.min.css</exclude>
+                </excludes>
+                <force>true</force>
+              </configuration>
+            </execution>
+            <!-- Compress the JS files under the resources folder -->
+            <execution>
+              <id>compress-resources</id>
+              <phase>generate-resources</phase>
+              <goals>
+                <goal>minify</goal>
+              </goals>
+              <configuration>
+                <baseSourceDir>${project.basedir}/src/main</baseSourceDir>
+                <baseTargetDir>${project.basedir}/src/main</baseTargetDir>
+                <sourceDir>resources</sourceDir>
+                <targetDir>resources</targetDir>
+                <skipMerge>true</skipMerge>
+                <includes>
+                  <include>**/*.js</include>
+                </includes>
+                <excludes>
+                  <exclude>**/webscripts/**</exclude>
+                  <exclude>**/site-webscripts/**</exclude>
+                  <exclude>**/*.lib.js</exclude>
+                  <exclude>**/*.css</exclude>
+                  <exclude>**/*.min.js</exclude>
+                  <exclude>**/*.min.css</exclude>
+                </excludes>
+                <force>true</force>
+              </configuration>
+            </execution>
+          </executions>
+        </plugin>
+
+        <!-- Hot reloading with JRebel -->
+        <plugin>
+          <groupId>org.zeroturnaround</groupId>
+          <artifactId>jrebel-maven-plugin</artifactId>
+          <version>${jrebel.plugin.version}</version>
+          <executions>
+            <execution>
+              <id>generate-rebel-xml</id>
+              <phase>process-resources</phase>
+              <goals>
+                <goal>generate</goal>
+              </goals>
+            </execution>
+          </executions>
+          <configuration>
+            <!-- For more information about how to configure JRebel plugin see:
+                 http://manuals.zeroturnaround.com/jrebel/standalone/maven.html#maven-rebel-xml -->
+            <classpath>
+              <fallback>all</fallback>
+              <resources>
+                <resource>
+                  <directory>${project.build.outputDirectory}</directory>
+                  <directory>${project.build.testOutputDirectory}</directory>
+                </resource>
+              </resources>
+            </classpath>
+            <!--
+              alwaysGenerate - default is false
+              If 'false' - rebel.xml is generated if timestamps of pom.xml and the current rebel.xml file are not equal.
+              If 'true' - rebel.xml will always be generated
+            -->
+            <alwaysGenerate>true</alwaysGenerate>
+          </configuration>
+        </plugin>
+
+      </plugins>
+    </pluginManagement>
+
     <plugins>
       <!-- The nexus-staging-maven-plugin is designed to take full advantage of the more advanced
              functionality that Nexus has to offer – functionality such as staging.
@@ -171,7 +317,7 @@
       <plugin>
         <groupId>org.sonatype.plugins</groupId>
         <artifactId>nexus-staging-maven-plugin</artifactId>
-        <version>1.6.13</version>
+        <version>${nexus.staging.maven.plugin.version}</version>
         <extensions>true</extensions>
         <configuration>
           <serverId>local-nexus</serverId>
@@ -184,371 +330,317 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-release-plugin</artifactId>
-        <version>3.0.1</version>
+        <version>${maven.release.plugin.version}</version>
         <configuration>
           <tagNameFormat>v@{project.version}</tagNameFormat>
           <autoVersionSubmodules>true</autoVersionSubmodules>
           <releaseProfiles>releases</releaseProfiles>
         </configuration>
       </plugin>
-
-      <!-- Filter the test resource files in the AIO parent project, and do property substitutions.
-           We need this config so this is done before the Alfresco Maven Plugin 'run' is executed. -->
-      <!--
-                     Build an AMP if 3rd party libs are needed by the extensions
-                     JARs are the default artifact produced in your modules, if you want to build an amp for each module
-                     you have to enable this plugin and inspect the src/main/assembly.xml file if you want to customize
-                     the layout of your AMP. The end result is that Maven will produce both a JAR file and an AMP with your
-                     module.
-                 -->
-      <!--
-      <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-assembly-plugin</artifactId>
-          <version>2.6</version>
-          <executions>
-              <execution>
-                  <id>build-amp-file</id>
-                  <phase>package</phase>
-                  <goals>
-                      <goal>single</goal>
-                  </goals>
-                  <configuration>
-                      <appendAssemblyId>false</appendAssemblyId>
-                      <descriptor>src/main/assembly/amp.xml</descriptor>
-                  </configuration>
-              </execution>
-          </executions>
-          <dependencies>
-              <dependency>
-                  <groupId>org.alfresco.maven.plugin</groupId>
-                  <artifactId>alfresco-maven-plugin</artifactId>
-                  <version>${alfresco.sdk.version}</version>
-              </dependency>
-          </dependencies>
-      </plugin>
-      -->
-
-      <!-- Filter the test resource files in the AIO parent project, and do property substitutions.
-           We need this config so this is done before the Alfresco Maven Plugin 'run' is executed. -->
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-resources-plugin</artifactId>
-        <version>3.1.0</version>
-        <configuration>
-          <encoding>UTF-8</encoding>
-          <nonFilteredFileExtensions> <!-- jpg, jpeg, gif, bmp and png are added automatically -->
-            <nonFilteredFileExtension>ftl</nonFilteredFileExtension>
-            <nonFilteredFileExtension>acp</nonFilteredFileExtension>
-            <nonFilteredFileExtension>svg</nonFilteredFileExtension>
-            <nonFilteredFileExtension>pdf</nonFilteredFileExtension>
-            <nonFilteredFileExtension>doc</nonFilteredFileExtension>
-            <nonFilteredFileExtension>docx</nonFilteredFileExtension>
-            <nonFilteredFileExtension>xls</nonFilteredFileExtension>
-            <nonFilteredFileExtension>xlsx</nonFilteredFileExtension>
-            <nonFilteredFileExtension>ppt</nonFilteredFileExtension>
-            <nonFilteredFileExtension>pptx</nonFilteredFileExtension>
-            <nonFilteredFileExtension>bin</nonFilteredFileExtension>
-            <nonFilteredFileExtension>lic</nonFilteredFileExtension>
-            <nonFilteredFileExtension>swf</nonFilteredFileExtension>
-            <nonFilteredFileExtension>zip</nonFilteredFileExtension>
-            <nonFilteredFileExtension>msg</nonFilteredFileExtension>
-            <nonFilteredFileExtension>jar</nonFilteredFileExtension>
-            <nonFilteredFileExtension>ttf</nonFilteredFileExtension>
-            <nonFilteredFileExtension>eot</nonFilteredFileExtension>
-            <nonFilteredFileExtension>woff</nonFilteredFileExtension>
-            <nonFilteredFileExtension>woff2</nonFilteredFileExtension>
-            <nonFilteredFileExtension>css</nonFilteredFileExtension>
-            <nonFilteredFileExtension>ico</nonFilteredFileExtension>
-            <nonFilteredFileExtension>psd</nonFilteredFileExtension>
-            <nonFilteredFileExtension>js</nonFilteredFileExtension>
-          </nonFilteredFileExtensions>
-        </configuration>
-        <executions>
-          <execution>
-            <id>copy-and-filter-docker-compose-resources</id>
-            <phase>validate</phase>
-            <goals>
-              <goal>copy-resources</goal>
-            </goals>
-            <configuration>
-              <outputDirectory>${project.build.outputDirectory}/docker</outputDirectory>
-              <resources>
-                <resource>
-                  <directory>docker</directory>
-                  <filtering>true</filtering>
-                </resource>
-              </resources>
-            </configuration>
-          </execution>
-          <execution>
-            <id>copy-and-filter-docker-resources</id>
-            <phase>validate</phase>
-            <goals>
-              <goal>copy-resources</goal>
-            </goals>
-            <configuration>
-              <outputDirectory>${project.build.directory}</outputDirectory>
-              <resources>
-                <resource>
-                  <directory>src/main/docker</directory>
-                  <filtering>true</filtering>
-                  <excludes>
-                    <exclude>**/*.jar</exclude>
-                    <exclude>**/*.so</exclude>
-                    <exclude>**/*.gz</exclude>
-                  </excludes>
-                </resource>
-              </resources>
-            </configuration>
-          </execution>
-          <execution>
-            <id>copy-and-filter-docker-resources-non-filtered</id>
-            <phase>validate</phase>
-            <goals>
-              <goal>copy-resources</goal>
-            </goals>
-            <configuration>
-              <outputDirectory>${project.build.directory}</outputDirectory>
-              <resources>
-                <resource>
-                  <directory>src/main/docker</directory>
-                  <filtering>false</filtering>
-                  <includes>
-                    <include>**/*.jar</include>
-                    <include>**/*.so</include>
-                    <include>**/*.gz</include>
-                  </includes>
-                </resource>
-              </resources>
-            </configuration>
-          </execution>
-          <execution>
-            <id>copy-repository-extension</id>
-            <phase>package</phase>
-            <goals>
-              <goal>copy-resources</goal>
-            </goals>
-            <configuration>
-              <outputDirectory>${project.build.directory}/extensions</outputDirectory>
-              <resources>
-                <resource>
-                  <directory>target</directory>
-                  <includes>
-                    <include>${project.build.finalName}.jar</include>
-                  </includes>
-                  <filtering>false</filtering>
-                </resource>
-              </resources>
-            </configuration>
-          </execution>
-          <execution>
-            <id>copy-repository-tests</id>
-            <phase>pre-integration-test</phase>
-            <goals>
-              <goal>copy-resources</goal>
-            </goals>
-            <configuration>
-              <outputDirectory>${project.build.directory}/extensions</outputDirectory>
-              <resources>
-                <resource>
-                  <directory>target</directory>
-                  <includes>
-                    <include>${project.build.finalName}-tests.jar</include>
-                  </includes>
-                  <filtering>false</filtering>
-                </resource>
-              </resources>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-dependency-plugin</artifactId>
-        <version>3.1.1</version>
-        <executions>
-          <!-- Copy the dependencies required for execute integration tests -->
-          <execution>
-            <id>collect-test-artifacts</id>
-            <phase>pre-integration-test</phase>
-            <goals>
-              <goal>copy-dependencies</goal>
-            </goals>
-            <configuration>
-              <outputDirectory>${project.build.directory}/extensions</outputDirectory>
-              <excludeScope>compile</excludeScope>
-            </configuration>
-          </execution>
-          <!-- Collect extensions (JARs or AMPs) declared in this module to be deployed to docker -->
-          <execution>
-            <id>collect-extensions</id>
-            <phase>package</phase>
-            <goals>
-              <goal>copy-dependencies</goal>
-            </goals>
-            <configuration>
-              <outputDirectory>${project.build.directory}/extensions</outputDirectory>
-              <includeScope>runtime</includeScope>
-              <!-- IMPORTANT: if using amp dependencies only, add <includeTypes>amp</includeTypes> -->
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-
-      <!-- Make sure we attach the tests so we can include them when running -->
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-jar-plugin</artifactId>
-        <version>3.1.0</version>
-        <executions>
-          <execution>
-            <goals>
-              <goal>test-jar</goal>
-            </goals>
-          </execution>
-        </executions>
-      </plugin>
-
-      <!-- Runs the integration tests, any class that follows naming convention
-           "**/IT*.java", "**/*IT.java", and "**/*ITCase.java" will be considered an integration test -->
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-failsafe-plugin</artifactId>
-        <version>3.0.0-M1</version>
-        <configuration>
-          <systemPropertyVariables>
-            <acs.endpoint.path>${test.acs.endpoint.path}</acs.endpoint.path>
-          </systemPropertyVariables>
-        </configuration>
-        <executions>
-          <execution>
-            <id>integration-test</id>
-            <phase>integration-test</phase>
-            <goals>
-              <goal>integration-test</goal>
-            </goals>
-          </execution>
-          <execution>
-            <id>verify-test</id>
-            <phase>verify</phase>
-            <goals>
-              <goal>verify</goal>
-            </goals>
-          </execution>
-        </executions>
-        <dependencies>
-          <dependency>
-            <groupId>org.apache.maven.surefire</groupId>
-            <artifactId>surefire-junit47</artifactId>
-            <version>3.0.0-M1</version>
-          </dependency>
-        </dependencies>
-      </plugin>
-
-      <!-- Compress JavaScript files and store as *.min.js -->
-      <plugin>
-        <groupId>com.github.blutorange</groupId>
-        <artifactId>closure-compiler-maven-plugin</artifactId>
-        <version>2.28.0</version>
-        <executions>
-          <!-- Compress the JS files under the assembly folder -->
-          <execution>
-            <id>compress-assembly</id>
-            <phase>generate-resources</phase>
-            <goals>
-              <goal>minify</goal>
-            </goals>
-            <configuration>
-              <baseSourceDir>${project.basedir}/src/main/assembly</baseSourceDir>
-              <baseTargetDir>${project.basedir}/src/main/assembly</baseTargetDir>
-              <sourceDir>web</sourceDir>
-              <targetDir>web</targetDir>
-              <skipMerge>true</skipMerge>
-              <includes>
-                <include>**/*.js</include>
-              </includes>
-              <excludes>
-                <exclude>**/webscripts/**</exclude>
-                <exclude>**/site-webscripts/**</exclude>
-                <exclude>**/META-INF/**</exclude>
-                <exclude>**/*.lib.js</exclude>
-                <exclude>**/*.css</exclude>
-                <exclude>**/*.min.js</exclude>
-                <exclude>**/*.min.css</exclude>
-              </excludes>
-              <force>true</force>
-            </configuration>
-          </execution>
-          <!-- Compress the JS files under the resources folder -->
-          <execution>
-            <id>compress-resources</id>
-            <phase>generate-resources</phase>
-            <goals>
-              <goal>minify</goal>
-            </goals>
-            <configuration>
-              <baseSourceDir>${project.basedir}/src/main</baseSourceDir>
-              <baseTargetDir>${project.basedir}/src/main</baseTargetDir>
-              <sourceDir>resources</sourceDir>
-              <targetDir>resources</targetDir>
-              <skipMerge>true</skipMerge>
-              <includes>
-                <include>**/*.js</include>
-              </includes>
-              <excludes>
-                <exclude>**/webscripts/**</exclude>
-                <exclude>**/site-webscripts/**</exclude>
-                <exclude>**/*.lib.js</exclude>
-                <exclude>**/*.css</exclude>
-                <exclude>**/*.min.js</exclude>
-                <exclude>**/*.min.css</exclude>
-              </excludes>
-              <force>true</force>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-
-      <!-- Hot reloading with JRebel -->
-      <plugin>
-        <groupId>org.zeroturnaround</groupId>
-        <artifactId>jrebel-maven-plugin</artifactId>
-        <executions>
-          <execution>
-            <id>generate-rebel-xml</id>
-            <phase>process-resources</phase>
-            <goals>
-              <goal>generate</goal>
-            </goals>
-          </execution>
-        </executions>
-        <configuration>
-          <!-- For more information about how to configure JRebel plugin see:
-               http://manuals.zeroturnaround.com/jrebel/standalone/maven.html#maven-rebel-xml -->
-          <classpath>
-            <fallback>all</fallback>
-            <resources>
-              <resource>
-                <directory>${project.build.outputDirectory}</directory>
-                <directory>${project.build.testOutputDirectory}</directory>
-              </resource>
-            </resources>
-          </classpath>
-
-          <!--
-            alwaysGenerate - default is false
-            If 'false' - rebel.xml is generated if timestamps of pom.xml and the current rebel.xml file are not equal.
-            If 'true' - rebel.xml will always be generated
-          -->
-          <alwaysGenerate>true</alwaysGenerate>
-        </configuration>
-      </plugin>
     </plugins>
   </build>
 
   <profiles>
+    <profile>
+      <!-- This profile should be activated in platform and share ui extension projects -->
+      <id>extension-project</id>
+      <activation>
+        <property>
+          <name>extensionProjectActivation</name>
+        </property>
+      </activation>
+      <build>
+        <plugins>
+          <!-- Filter the resource files in a project and do property substitutions:
+             * Copy and filter Docker Compose resources
+             * Copy and filter Docker resources
+             * Copy and filter Docker resources non-filtered
+             * Copy repository extensions
+             * Copy repository test jars
+          -->
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-resources-plugin</artifactId>
+            <version>${maven.resource.plugin.version}</version>
+            <configuration>
+              <encoding>UTF-8</encoding>
+              <nonFilteredFileExtensions> <!-- jpg, jpeg, gif, bmp and png are added automatically -->
+                <nonFilteredFileExtension>ftl</nonFilteredFileExtension>
+                <nonFilteredFileExtension>acp</nonFilteredFileExtension>
+                <nonFilteredFileExtension>svg</nonFilteredFileExtension>
+                <nonFilteredFileExtension>pdf</nonFilteredFileExtension>
+                <nonFilteredFileExtension>doc</nonFilteredFileExtension>
+                <nonFilteredFileExtension>docx</nonFilteredFileExtension>
+                <nonFilteredFileExtension>xls</nonFilteredFileExtension>
+                <nonFilteredFileExtension>xlsx</nonFilteredFileExtension>
+                <nonFilteredFileExtension>ppt</nonFilteredFileExtension>
+                <nonFilteredFileExtension>pptx</nonFilteredFileExtension>
+                <nonFilteredFileExtension>bin</nonFilteredFileExtension>
+                <nonFilteredFileExtension>lic</nonFilteredFileExtension>
+                <nonFilteredFileExtension>swf</nonFilteredFileExtension>
+                <nonFilteredFileExtension>zip</nonFilteredFileExtension>
+                <nonFilteredFileExtension>msg</nonFilteredFileExtension>
+                <nonFilteredFileExtension>jar</nonFilteredFileExtension>
+                <nonFilteredFileExtension>ttf</nonFilteredFileExtension>
+                <nonFilteredFileExtension>eot</nonFilteredFileExtension>
+                <nonFilteredFileExtension>woff</nonFilteredFileExtension>
+                <nonFilteredFileExtension>woff2</nonFilteredFileExtension>
+                <nonFilteredFileExtension>css</nonFilteredFileExtension>
+                <nonFilteredFileExtension>ico</nonFilteredFileExtension>
+                <nonFilteredFileExtension>psd</nonFilteredFileExtension>
+                <nonFilteredFileExtension>js</nonFilteredFileExtension>
+              </nonFilteredFileExtensions>
+            </configuration>
+            <executions>
+              <execution>
+                <id>copy-and-filter-docker-compose-resources</id>
+                <phase>validate</phase>
+                <goals>
+                  <goal>copy-resources</goal>
+                </goals>
+                <configuration>
+                  <outputDirectory>${project.build.outputDirectory}/docker</outputDirectory>
+                  <resources>
+                    <resource>
+                      <directory>docker</directory>
+                      <filtering>true</filtering>
+                    </resource>
+                  </resources>
+                </configuration>
+              </execution>
+              <execution>
+                <id>copy-and-filter-docker-resources</id>
+                <phase>validate</phase>
+                <goals>
+                  <goal>copy-resources</goal>
+                </goals>
+                <configuration>
+                  <outputDirectory>${project.build.directory}</outputDirectory>
+                  <resources>
+                    <resource>
+                      <directory>src/main/docker</directory>
+                      <filtering>true</filtering>
+                      <excludes>
+                        <exclude>**/*.jar</exclude>
+                        <exclude>**/*.so</exclude>
+                        <exclude>**/*.gz</exclude>
+                      </excludes>
+                    </resource>
+                  </resources>
+                </configuration>
+              </execution>
+              <execution>
+                <id>copy-and-filter-docker-resources-non-filtered</id>
+                <phase>validate</phase>
+                <goals>
+                  <goal>copy-resources</goal>
+                </goals>
+                <configuration>
+                  <outputDirectory>${project.build.directory}</outputDirectory>
+                  <resources>
+                    <resource>
+                      <directory>src/main/docker</directory>
+                      <filtering>false</filtering>
+                      <includes>
+                        <include>**/*.jar</include>
+                        <include>**/*.so</include>
+                        <include>**/*.gz</include>
+                      </includes>
+                    </resource>
+                  </resources>
+                </configuration>
+              </execution>
+              <execution>
+                <id>copy-repository-extension</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>copy-resources</goal>
+                </goals>
+                <configuration>
+                  <outputDirectory>${project.build.directory}/extensions</outputDirectory>
+                  <resources>
+                    <resource>
+                      <directory>target</directory>
+                      <includes>
+                        <include>${project.build.finalName}.jar</include>
+                      </includes>
+                      <filtering>false</filtering>
+                    </resource>
+                  </resources>
+                </configuration>
+              </execution>
+              <execution>
+                <id>copy-repository-tests</id>
+                <phase>pre-integration-test</phase>
+                <goals>
+                  <goal>copy-resources</goal>
+                </goals>
+                <configuration>
+                  <outputDirectory>${project.build.directory}/extensions</outputDirectory>
+                  <resources>
+                    <resource>
+                      <directory>target</directory>
+                      <includes>
+                        <include>${project.build.finalName}-tests.jar</include>
+                      </includes>
+                      <filtering>false</filtering>
+                    </resource>
+                  </resources>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <!-- Define plugin for copying extension dependencies, the Dockerfile activated from Docker Compose file
+               uses these extensions when building custom Docker Image -->
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-dependency-plugin</artifactId>
+            <version>${maven.dependency.plugin.version}</version>
+            <executions>
+              <!-- Copy the dependencies required for execute integration tests -->
+              <execution>
+                <id>collect-test-artifacts</id>
+                <phase>pre-integration-test</phase>
+                <goals>
+                  <goal>copy-dependencies</goal>
+                </goals>
+                <configuration>
+                  <outputDirectory>${project.build.directory}/extensions</outputDirectory>
+                  <excludeScope>compile</excludeScope>
+                </configuration>
+              </execution>
+              <!-- Collect extensions (JARs or AMPs) declared in this module to be deployed to docker -->
+              <execution>
+                <id>collect-extensions</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>copy-dependencies</goal>
+                </goals>
+                <configuration>
+                  <outputDirectory>${project.build.directory}/extensions</outputDirectory>
+                  <includeScope>runtime</includeScope>
+                  <!-- IMPORTANT: if using amp dependencies only, add <includeTypes>amp</includeTypes> -->
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <!-- This profile should be activated in AIO Aggregator projects -->
+      <id>aggregator-project</id>
+      <activation>
+        <property>
+          <name>aggregatorProjectActivation</name>
+        </property>
+      </activation>
+      <build>
+        <pluginManagement>
+          <plugins>
+            <!-- Define plugin for copying extension dependencies, the Dockerfile activated from Docker Compose file
+                 uses these extensions when building custom Docker Image -->
+            <plugin>
+              <groupId>org.apache.maven.plugins</groupId>
+              <artifactId>maven-dependency-plugin</artifactId>
+              <version>${maven.dependency.plugin.version}</version>
+            </plugin>
+            <!-- Define plugin for creating JAR files, used by integration test project for example -->
+            <plugin>
+              <groupId>org.apache.maven.plugins</groupId>
+              <artifactId>maven-jar-plugin</artifactId>
+              <version>${maven.jar.plugin.version}</version>
+            </plugin>
+            <!-- Define plugin for running integration tests, used by integration test project for example  -->
+            <plugin>
+              <groupId>org.apache.maven.plugins</groupId>
+              <artifactId>maven-failsafe-plugin</artifactId>
+              <version>${maven.failsafe.plugin.version}</version>
+              <executions>
+                <execution>
+                  <id>integration-test</id>
+                  <phase>integration-test</phase>
+                  <goals>
+                    <goal>integration-test</goal>
+                  </goals>
+                </execution>
+                <execution>
+                  <id>verify-test</id>
+                  <phase>verify</phase>
+                  <goals>
+                    <goal>verify</goal>
+                  </goals>
+                </execution>
+              </executions>
+              <dependencies>
+                <dependency>
+                  <groupId>org.apache.maven.surefire</groupId>
+                  <artifactId>surefire-junit47</artifactId>
+                  <version>${maven.failsafe.plugin.version}</version>
+                </dependency>
+              </dependencies>
+            </plugin>
+          </plugins>
+        </pluginManagement>
+        <plugins>
+          <!-- Filter the resource files in a project and do property substitutions:
+             * Copy and filter Docker Compose resources
+          -->
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-resources-plugin</artifactId>
+            <version>${maven.resource.plugin.version}</version>
+            <configuration>
+              <encoding>UTF-8</encoding>
+              <nonFilteredFileExtensions> <!-- jpg, jpeg, gif, bmp and png are added automatically -->
+                <nonFilteredFileExtension>ftl</nonFilteredFileExtension>
+                <nonFilteredFileExtension>acp</nonFilteredFileExtension>
+                <nonFilteredFileExtension>svg</nonFilteredFileExtension>
+                <nonFilteredFileExtension>pdf</nonFilteredFileExtension>
+                <nonFilteredFileExtension>doc</nonFilteredFileExtension>
+                <nonFilteredFileExtension>docx</nonFilteredFileExtension>
+                <nonFilteredFileExtension>xls</nonFilteredFileExtension>
+                <nonFilteredFileExtension>xlsx</nonFilteredFileExtension>
+                <nonFilteredFileExtension>ppt</nonFilteredFileExtension>
+                <nonFilteredFileExtension>pptx</nonFilteredFileExtension>
+                <nonFilteredFileExtension>bin</nonFilteredFileExtension>
+                <nonFilteredFileExtension>lic</nonFilteredFileExtension>
+                <nonFilteredFileExtension>swf</nonFilteredFileExtension>
+                <nonFilteredFileExtension>zip</nonFilteredFileExtension>
+                <nonFilteredFileExtension>msg</nonFilteredFileExtension>
+                <nonFilteredFileExtension>jar</nonFilteredFileExtension>
+                <nonFilteredFileExtension>ttf</nonFilteredFileExtension>
+                <nonFilteredFileExtension>eot</nonFilteredFileExtension>
+                <nonFilteredFileExtension>woff</nonFilteredFileExtension>
+                <nonFilteredFileExtension>woff2</nonFilteredFileExtension>
+                <nonFilteredFileExtension>css</nonFilteredFileExtension>
+                <nonFilteredFileExtension>ico</nonFilteredFileExtension>
+                <nonFilteredFileExtension>psd</nonFilteredFileExtension>
+                <nonFilteredFileExtension>js</nonFilteredFileExtension>
+              </nonFilteredFileExtensions>
+            </configuration>
+            <executions>
+              <execution>
+                <id>copy-and-filter-docker-resources</id>
+                <phase>validate</phase>
+                <goals>
+                  <goal>copy-resources</goal>
+                </goals>
+                <configuration>
+                  <outputDirectory>${project.build.outputDirectory}/docker</outputDirectory>
+                  <resources>
+                    <resource>
+                      <directory>docker</directory>
+                      <filtering>true</filtering>
+                    </resource>
+                  </resources>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
     <profile>
       <!-- Triggered by maven-release-plugin and does the deploy of released and tagged artifacts -->
       <id>releases</id>
@@ -557,7 +649,7 @@
           <plugin>
             <groupId>org.sonatype.plugins</groupId>
             <artifactId>nexus-staging-maven-plugin</artifactId>
-            <version>1.6.13</version>
+            <version>${nexus.staging.maven.plugin.version}</version>
             <extensions>true</extensions>
             <configuration>
               <serverId>local-nexus</serverId>
