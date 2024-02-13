@@ -50,6 +50,8 @@
     <maven.jar.plugin.version>3.1.0</maven.jar.plugin.version>
     <closure.compiler.maven.plugin.version>2.28.0</closure.compiler.maven.plugin.version>
     <maven.assembly.plugin.version>2.6</maven.assembly.plugin.version>
+    <docker.maven.plugin.version>0.43.4</docker.maven.plugin.version>
+    <maven.clean.plugin.version>3.3.2</maven.clean.plugin.version>
 
   </properties>
 
@@ -169,6 +171,59 @@
     <!-- Define and configure plugins that might be used by extension projects -->
     <pluginManagement>
       <plugins>
+
+        <!-- Build Docker Image -->
+        <plugin>
+          <groupId>io.fabric8</groupId>
+          <artifactId>docker-maven-plugin</artifactId>
+          <version>${docker.maven.plugin.version}</version>
+          <executions>
+            <execution>
+              <id>build-docker-image</id>
+              <phase>package</phase>
+              <goals>
+                <goal>build</goal>
+              </goals>
+              <configuration>
+                <!-- Output Docker Image directory has to be outside target directory, so we do not get
+                     circular dependency when building Docker Image tar -->
+                <outputDirectory>${project.basedir}/docker-image-build</outputDirectory>
+                <!-- Show output on how the image is built -->
+                <verbose>true</verbose>
+                <images>
+                  <image>
+                    <name>${project.artifactId}</name>
+                    <build>
+                      <!-- Set the Dockerfile location and the directory where extensions are picked
+                           up to be included in the custom Docker Image -->
+                      <dockerFile>${project.build.directory}/Dockerfile</dockerFile>
+                      <contextDir>${project.build.directory}</contextDir>
+                      <!-- Tag as latest and current project version -->
+                      <tags>
+                        <tag>latest</tag>
+                        <tag>${project.version}</tag>
+                      </tags>
+                    </build>
+                  </image>
+                </images>
+              </configuration>
+            </execution>
+          </executions>
+        </plugin>
+
+        <!-- Clean the ${project.basedir}/docker-image-build directory that is outside target -->
+        <plugin>
+          <artifactId>maven-clean-plugin</artifactId>
+          <version>${maven.clean.plugin.version}</version>
+          <configuration>
+            <filesets>
+              <fileset>
+                <directory>${project.basedir}/docker-image-build</directory>
+              </fileset>
+            </filesets>
+          </configuration>
+        </plugin>
+
         <!--
            Build an AMP if 3rd party libs are needed by the extensions
            JARs are the default artifact produced in your modules, if you want to build an amp for each module
@@ -721,6 +776,11 @@
       Alfresco Maven Repositories
       -->
   <repositories>
+    <!-- Repository to be used when building from inside a docker container - localhost will not work then -->
+    <repository>
+      <id>local-nexus</id>
+      <url>http://host.docker.internal:8081/repository/maven-releases/</url>
+    </repository>
     <repository>
       <id>alfresco-public</id>
       <url>https://artifacts.alfresco.com/nexus/content/groups/public</url>
